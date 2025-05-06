@@ -1,0 +1,578 @@
+// src/pages/Orders.tsx
+import { useState } from 'react';
+import OrdersTable from '../components/orders/OrdersTable';
+import OrderFilter from '../components/orders/OrderFilter';
+import OrderDetail from '../components/orders/OrderDetail';
+
+const Orders = () => {
+  const [filterOptions, setFilterOptions] = useState({
+    status: 'all',
+    date: 'today',
+    searchQuery: '',
+  });
+  
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderDetail, setShowOrderDetail] = useState(false);
+  
+  const handleFilterChange = (newFilters) => {
+    setFilterOptions({ ...filterOptions, ...newFilters });
+  };
+  
+  const handleOrderSelect = (order) => {
+    setSelectedOrder(order);
+    setShowOrderDetail(true);
+  };
+  
+  const closeOrderDetail = () => {
+    setShowOrderDetail(false);
+  };
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold text-gray-800">Orders</h1>
+        <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+          Create New Order
+        </button>
+      </div>
+      
+      <OrderFilter 
+        filterOptions={filterOptions} 
+        onFilterChange={handleFilterChange} 
+      />
+      
+      <OrdersTable 
+        filterOptions={filterOptions}
+        onOrderSelect={handleOrderSelect}
+      />
+      
+      {showOrderDetail && selectedOrder && (
+        <OrderDetail 
+          order={selectedOrder} 
+          onClose={closeOrderDetail} 
+        />
+      )}
+    </div>
+  );
+};
+
+export default Orders;
+
+// src/components/orders/OrderFilter.tsx
+const OrderFilter = ({ filterOptions, onFilterChange }) => {
+  const handleStatusChange = (e) => {
+    onFilterChange({ status: e.target.value });
+  };
+  
+  const handleDateChange = (e) => {
+    onFilterChange({ date: e.target.value });
+  };
+  
+  const handleSearchChange = (e) => {
+    onFilterChange({ searchQuery: e.target.value });
+  };
+  
+  return (
+    <div className="bg-white p-4 rounded-lg shadow">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+            Status
+          </label>
+          <select
+            id="status"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filterOptions.status}
+            onChange={handleStatusChange}
+          >
+            <option value="all">All Statuses</option>
+            <option value="new">New</option>
+            <option value="preparing">Preparing</option>
+            <option value="ready">Ready</option>
+            <option value="in-delivery">In Delivery</option>
+            <option value="delivered">Delivered</option>
+            <option value="canceled">Canceled</option>
+          </select>
+        </div>
+        
+        <div>
+          <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+            Date Range
+          </label>
+          <select
+            id="date"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filterOptions.date}
+            onChange={handleDateChange}
+          >
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this-week">This Week</option>
+            <option value="last-week">Last Week</option>
+            <option value="this-month">This Month</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        
+        <div className="md:col-span-2">
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+            Search
+          </label>
+          <input
+            id="search"
+            type="text"
+            placeholder="Search by order #, customer name, or phone..."
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filterOptions.searchQuery}
+            onChange={handleSearchChange}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OrderFilter;
+
+// src/components/orders/OrdersTable.tsx
+import { useEffect, useState } from 'react';
+
+// Sample order data - in a real app, this would come from an API
+const ordersData = [
+  {
+    id: 'ORD-7845',
+    customer: 'John Smith',
+    phone: '(555) 123-4567',
+    items: [
+      { name: 'Pepperoni Pizza', size: 'Large', quantity: 2, price: 15.99 },
+      { name: 'Garlic Bread', size: 'Regular', quantity: 1, price: 4.99 },
+      { name: 'Coke', size: '2L', quantity: 1, price: 2.99 }
+    ],
+    total: 39.96,
+    status: 'delivered',
+    paymentMethod: 'Credit Card',
+    address: '123 Main St, Anytown, USA',
+    orderTime: '2025-04-29T10:30:00',
+    deliveryTime: '2025-04-29T11:15:00'
+  },
+  {
+    id: 'ORD-7846',
+    customer: 'Sarah Johnson',
+    phone: '(555) 234-5678',
+    items: [
+      { name: 'Veggie Supreme', size: 'Medium', quantity: 1, price: 12.99 },
+      { name: 'Buffalo Wings', size: '12 pcs', quantity: 1, price: 10.99 }
+    ],
+    total: 23.98,
+    status: 'in-delivery',
+    paymentMethod: 'Cash',
+    address: '456 Oak Ave, Somewhere, USA',
+    orderTime: '2025-04-29T11:45:00',
+    deliveryTime: null
+  },
+  {
+    id: 'ORD-7847',
+    customer: 'Michael Brown',
+    phone: '(555) 345-6789',
+    items: [
+      { name: 'Meat Lovers Pizza', size: 'Extra Large', quantity: 1, price: 18.99 },
+      { name: 'Cheese Sticks', size: 'Regular', quantity: 1, price: 5.99 },
+      { name: 'Sprite', size: '20oz', quantity: 2, price: 1.99 }
+    ],
+    total: 28.96,
+    status: 'preparing',
+    paymentMethod: 'Credit Card',
+    address: '789 Pine St, Elsewhere, USA',
+    orderTime: '2025-04-29T12:15:00',
+    deliveryTime: null
+  },
+  {
+    id: 'ORD-7848',
+    customer: 'Emily Davis',
+    phone: '(555) 456-7890',
+    items: [
+      { name: 'Margherita Pizza', size: 'Medium', quantity: 1, price: 11.99 },
+      { name: 'Caesar Salad', size: 'Regular', quantity: 1, price: 6.99 }
+    ],
+    total: 18.98,
+    status: 'ready',
+    paymentMethod: 'Online Payment',
+    address: '321 Elm St, Nowhere, USA',
+    orderTime: '2025-04-29T12:30:00',
+    deliveryTime: null
+  },
+  {
+    id: 'ORD-7849',
+    customer: 'James Wilson',
+    phone: '(555) 567-8901',
+    items: [
+      { name: 'BBQ Chicken Pizza', size: 'Large', quantity: 1, price: 16.99 },
+      { name: 'Breadsticks', size: 'Regular', quantity: 1, price: 4.99 },
+      { name: 'Dr. Pepper', size: '2L', quantity: 1, price: 2.99 }
+    ],
+    total: 24.97,
+    status: 'new',
+    paymentMethod: 'Credit Card',
+    address: '654 Maple Ave, Anyplace, USA',
+    orderTime: '2025-04-29T12:45:00',
+    deliveryTime: null
+  },
+  {
+    id: 'ORD-7850',
+    customer: 'Lisa Anderson',
+    phone: '(555) 678-9012',
+    items: [
+      { name: 'Hawaiian Pizza', size: 'Medium', quantity: 1, price: 12.99 },
+      { name: 'Cheesy Bread', size: 'Regular', quantity: 1, price: 5.99 },
+      { name: 'Pepsi', size: '20oz', quantity: 1, price: 1.99 }
+    ],
+    total: 20.97,
+    status: 'canceled',
+    paymentMethod: 'Credit Card',
+    address: '987 Cedar St, Someplace, USA',
+    orderTime: '2025-04-29T09:15:00',
+    deliveryTime: null
+  }
+];
+
+const getStatusLabel = (status) => {
+  switch (status) {
+    case 'new':
+      return 'New';
+    case 'preparing':
+      return 'Preparing';
+    case 'ready':
+      return 'Ready for Pickup/Delivery';
+    case 'in-delivery':
+      return 'In Delivery';
+    case 'delivered':
+      return 'Delivered';
+    case 'canceled':
+      return 'Canceled';
+    default:
+      return status;
+  }
+};
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'new':
+      return 'bg-purple-100 text-purple-800';
+    case 'preparing':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'ready':
+      return 'bg-orange-100 text-orange-800';
+    case 'in-delivery':
+      return 'bg-blue-100 text-blue-800';
+    case 'delivered':
+      return 'bg-green-100 text-green-800';
+    case 'canceled':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }).format(date);
+};
+
+const OrdersTable = ({ filterOptions, onOrderSelect }) => {
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  
+  useEffect(() => {
+    // Filter orders based on filterOptions
+    let results = [...ordersData];
+    
+    // Filter by status
+    if (filterOptions.status !== 'all') {
+      results = results.filter(order => order.status === filterOptions.status);
+    }
+    
+    // Filter by date
+    // This is a simplified version - in a real app, you would use a proper date library
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (filterOptions.date === 'today') {
+      const todayStr = today.toISOString().split('T')[0];
+      results = results.filter(order => 
+        order.orderTime.startsWith(todayStr)
+      );
+    }
+    
+    // Filter by search query
+    if (filterOptions.searchQuery) {
+      const query = filterOptions.searchQuery.toLowerCase();
+      results = results.filter(order => 
+        order.id.toLowerCase().includes(query) || 
+        order.customer.toLowerCase().includes(query) || 
+        order.phone.includes(query)
+      );
+    }
+    
+    setFilteredOrders(results);
+  }, [filterOptions]);
+  
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Order ID
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Customer
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Order Time
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Items
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredOrders.map((order) => (
+              <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => onOrderSelect(order)}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-blue-600">{order.id}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">{order.customer}</div>
+                  <div className="text-sm text-gray-500">{order.phone}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">{formatDate(order.orderTime)}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">{order.items.length} items</div>
+                  <div className="text-xs text-gray-500 truncate max-w-xs">
+                    {order.items.map(item => `${item.quantity}x ${item.name}`).join(', ')}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">${order.total.toFixed(2)}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status)}`}>
+                    {getStatusLabel(order.status)}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button 
+                    className="text-blue-600 hover:text-blue-900 mr-3"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOrderSelect(order);
+                    }}
+                  >
+                    View
+                  </button>
+                  <button 
+                    className="text-gray-600 hover:text-gray-900"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Add edit functionality
+                    }}
+                  >
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+            
+            {filteredOrders.length === 0 && (
+              <tr>
+                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                  No orders found matching your filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default OrdersTable;
+
+// src/components/orders/OrderDetail.tsx
+const OrderDetail = ({ order, onClose }) => {
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    }).format(date);
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-semibold text-gray-800">
+            Order Details - {order.id}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Customer Information</h3>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Name:</span> {order.customer}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Phone:</span> {order.phone}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Address:</span> {order.address}
+                </p>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Order Information</h3>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Order Time:</span> {formatDateTime(order.orderTime)}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Delivery Time:</span> {formatDateTime(order.deliveryTime)}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Payment Method:</span> {order.paymentMethod}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Status:</span>{' '}
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status)}`}>
+                    {getStatusLabel(order.status)}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Order Items</h3>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Item
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Size
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Quantity
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Price
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Subtotal
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {order.items.map((item, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {item.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.size}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.quantity}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      ${item.price.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      ${(item.price * item.quantity).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50">
+                  <td colSpan="4" className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
+                    Total:
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    ${order.total.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            {order.status !== 'delivered' && order.status !== 'canceled' && (
+              <>
+                <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                  Update Status
+                </button>
+                {order.status !== 'in-delivery' && (
+                  <button className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+                    Mark as Delivered
+                  </button>
+                )}
+              </>
+            )}
+            {order.status !== 'canceled' && order.status !== 'delivered' && (
+              <button className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors">
+                Cancel Order
+              </button>
+            )}
+            <button 
+              className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OrderDetail;

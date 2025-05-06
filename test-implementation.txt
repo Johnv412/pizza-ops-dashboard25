@@ -1,0 +1,341 @@
+// src/components/dashboard/KPICard.test.jsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import KPICard from './KPICard';
+
+describe('KPICard Component', () => {
+  it('renders with all props correctly', () => {
+    render(
+      <KPICard 
+        title="Total Sales" 
+        value="$12,458" 
+        change="+12.5%" 
+        isPositive={true} 
+        icon="currency"
+      />
+    );
+    
+    // Check if all elements are rendered
+    expect(screen.getByText('Total Sales')).toBeInTheDocument();
+    expect(screen.getByText('$12,458')).toBeInTheDocument();
+    expect(screen.getByText('+12.5%')).toBeInTheDocument();
+    expect(screen.getByText('vs last month')).toBeInTheDocument();
+    
+    // Check if SVG icon is rendered (would need to use a more specific test)
+    const svgElement = document.querySelector('svg');
+    expect(svgElement).toBeInTheDocument();
+    
+    // Check for positive styling
+    const changeElement = screen.getByText('+12.5%').closest('div');
+    expect(changeElement).toHaveClass('text-green-600');
+  });
+  
+  it('renders with negative change correctly', () => {
+    render(
+      <KPICard 
+        title="Customer Satisfaction" 
+        value="4.8/5" 
+        change="-0.2%" 
+        isPositive={false} 
+        icon="customer"
+      />
+    );
+    
+    expect(screen.getByText('Customer Satisfaction')).toBeInTheDocument();
+    expect(screen.getByText('4.8/5')).toBeInTheDocument();
+    expect(screen.getByText('-0.2%')).toBeInTheDocument();
+    
+    // Check for negative styling
+    const changeElement = screen.getByText('-0.2%').closest('div');
+    expect(changeElement).toHaveClass('text-red-600');
+  });
+  
+  it('renders different icons based on prop', () => {
+    const { rerender } = render(<KPICard title="Test" value="Test" change="0%" isPositive={true} icon="currency" />);
+    expect(document.querySelector('svg')).toBeInTheDocument();
+    
+    rerender(<KPICard title="Test" value="Test" change="0%" isPositive={true} icon="order" />);
+    expect(document.querySelector('svg')).toBeInTheDocument();
+    
+    rerender(<KPICard title="Test" value="Test" change="0%" isPositive={true} icon="average" />);
+    expect(document.querySelector('svg')).toBeInTheDocument();
+    
+    rerender(<KPICard title="Test" value="Test" change="0%" isPositive={true} icon="customer" />);
+    expect(document.querySelector('svg')).toBeInTheDocument();
+  });
+});
+
+// src/components/dashboard/SalesChart.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render } from '@testing-library/react';
+import SalesChart from './SalesChart';
+
+// Mock Recharts components to avoid rendering issues in tests
+vi.mock('recharts', () => {
+  const OriginalModule = vi.importActual('recharts');
+  
+  return {
+    ...OriginalModule,
+    ResponsiveContainer: ({ children }) => <div data-testid="responsive-container">{children}</div>,
+    AreaChart: ({ data, margin, children }) => (
+      <div data-testid="area-chart" data-chart-data={JSON.stringify(data)}>
+        {children}
+      </div>
+    ),
+    CartesianGrid: ({ strokeDasharray }) => <div data-testid="cartesian-grid" data-dasharray={strokeDasharray} />,
+    XAxis: ({ dataKey }) => <div data-testid="x-axis" data-key={dataKey} />,
+    YAxis: () => <div data-testid="y-axis" />,
+    Tooltip: ({ formatter }) => <div data-testid="tooltip" />,
+    Area: ({ type, dataKey, stroke, fill }) => (
+      <div 
+        data-testid="area" 
+        data-type={type} 
+        data-key={dataKey} 
+        data-stroke={stroke} 
+        data-fill={fill} 
+      />
+    ),
+  };
+});
+
+describe('SalesChart Component', () => {
+  it('renders the chart with correct data', () => {
+    const { getByTestId } = render(<SalesChart />);
+    
+    // Check if the chart components are rendered
+    expect(getByTestId('responsive-container')).toBeInTheDocument();
+    expect(getByTestId('area-chart')).toBeInTheDocument();
+    expect(getByTestId('cartesian-grid')).toBeInTheDocument();
+    expect(getByTestId('x-axis')).toBeInTheDocument();
+    expect(getByTestId('y-axis')).toBeInTheDocument();
+    expect(getByTestId('tooltip')).toBeInTheDocument();
+    expect(getByTestId('area')).toBeInTheDocument();
+    
+    // Check the chart data
+    const chartData = JSON.parse(getByTestId('area-chart').dataset.chartData);
+    expect(chartData).toHaveLength(12); // 12 months of data
+    expect(chartData[0].name).toBe('Jan');
+    expect(chartData[0].sales).toBe(4000);
+    
+    // Check chart props
+    expect(getByTestId('x-axis').dataset.key).toBe('name');
+    expect(getByTestId('area').dataset.key).toBe('sales');
+    expect(getByTestId('area').dataset.stroke).toBe('#3b82f6');
+    expect(getByTestId('area').dataset.fill).toBe('#93c5fd');
+  });
+});
+
+// src/components/orders/OrderFilter.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import OrderFilter from './OrderFilter';
+
+describe('OrderFilter Component', () => {
+  it('calls onFilterChange when status filter changes', () => {
+    const mockOnFilterChange = vi.fn();
+    render(
+      <OrderFilter 
+        filterOptions={{ status: 'all', date: 'today', searchQuery: '' }}
+        onFilterChange={mockOnFilterChange}
+      />
+    );
+    
+    // Change status filter
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'delivered' } });
+    
+    // Check if callback was called with correct params
+    expect(mockOnFilterChange).toHaveBeenCalledWith({ status: 'delivered' });
+  });
+  
+  it('calls onFilterChange when date filter changes', () => {
+    const mockOnFilterChange = vi.fn();
+    render(
+      <OrderFilter 
+        filterOptions={{ status: 'all', date: 'today', searchQuery: '' }}
+        onFilterChange={mockOnFilterChange}
+      />
+    );
+    
+    // Change date filter
+    fireEvent.change(screen.getByLabelText('Date Range'), { target: { value: 'this-week' } });
+    
+    // Check if callback was called with correct params
+    expect(mockOnFilterChange).toHaveBeenCalledWith({ date: 'this-week' });
+  });
+  
+  it('calls onFilterChange when search query changes', () => {
+    const mockOnFilterChange = vi.fn();
+    render(
+      <OrderFilter 
+        filterOptions={{ status: 'all', date: 'today', searchQuery: '' }}
+        onFilterChange={mockOnFilterChange}
+      />
+    );
+    
+    // Change search query
+    fireEvent.change(screen.getByLabelText('Search'), { 
+      target: { value: 'test search' } 
+    });
+    
+    // Check if callback was called with correct params
+    expect(mockOnFilterChange).toHaveBeenCalledWith({ searchQuery: 'test search' });
+  });
+  
+  it('renders with provided filter options', () => {
+    render(
+      <OrderFilter 
+        filterOptions={{ status: 'delivered', date: 'this-week', searchQuery: 'test' }}
+        onFilterChange={() => {}}
+      />
+    );
+    
+    // Check if the component renders with the provided filter values
+    expect(screen.getByLabelText('Status').value).toBe('delivered');
+    expect(screen.getByLabelText('Date Range').value).toBe('this-week');
+    expect(screen.getByLabelText('Search').value).toBe('test');
+  });
+});
+
+// src/pages/Dashboard.test.jsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import Dashboard from './Dashboard';
+
+// Mock the dashboard components
+vi.mock('../components/dashboard/KPICard', () => ({
+  default: ({ title, value }) => (
+    <div data-testid="kpi-card" data-title={title} data-value={value}>
+      {title}: {value}
+    </div>
+  )
+}));
+
+vi.mock('../components/dashboard/SalesChart', () => ({
+  default: () => <div data-testid="sales-chart">Sales Chart</div>
+}));
+
+vi.mock('../components/dashboard/TopSellingItems', () => ({
+  default: () => <div data-testid="top-selling-items">Top Selling Items</div>
+}));
+
+vi.mock('../components/dashboard/RecentOrders', () => ({
+  default: () => <div data-testid="recent-orders">Recent Orders</div>
+}));
+
+vi.mock('../components/dashboard/OrdersByLocation', () => ({
+  default: () => <div data-testid="orders-by-location">Orders By Location</div>
+}));
+
+describe('Dashboard Page', () => {
+  beforeEach(() => {
+    // Reset mocks
+    vi.resetAllMocks();
+    
+    // Mock setTimeout to run immediately
+    vi.useFakeTimers();
+  });
+  
+  it('shows loading state initially', () => {
+    render(<Dashboard />);
+    
+    // Check loading spinner is shown
+    expect(screen.getByClass('animate-spin')).toBeInTheDocument();
+    
+    // KPI cards should not be visible yet
+    expect(screen.queryByTestId('kpi-card')).not.toBeInTheDocument();
+  });
+  
+  it('renders dashboard components after loading', async () => {
+    render(<Dashboard />);
+    
+    // Advance timers to complete loading
+    vi.advanceTimersByTime(1000);
+    
+    // Wait for the loading state to change
+    await waitFor(() => {
+      // Dashboard title should be visible
+      expect(screen.getByText('Dashboard')).toBeInTheDocument();
+      
+      // Check if all components are rendered
+      expect(screen.getAllByTestId('kpi-card')).toHaveLength(4);
+      expect(screen.getByTestId('sales-chart')).toBeInTheDocument();
+      expect(screen.getByTestId('top-selling-items')).toBeInTheDocument();
+      expect(screen.getByTestId('recent-orders')).toBeInTheDocument();
+      expect(screen.getByTestId('orders-by-location')).toBeInTheDocument();
+    });
+    
+    // Check specific KPI cards
+    const kpiCards = screen.getAllByTestId('kpi-card');
+    expect(kpiCards[0].dataset.title).toBe('Total Sales');
+    expect(kpiCards[0].dataset.value).toBe('$12,458');
+    
+    expect(kpiCards[1].dataset.title).toBe('Orders');
+    expect(kpiCards[1].dataset.value).toBe('324');
+    
+    expect(kpiCards[2].dataset.title).toBe('Average Order Value');
+    expect(kpiCards[2].dataset.value).toBe('$38.45');
+    
+    expect(kpiCards[3].dataset.title).toBe('Customer Satisfaction');
+    expect(kpiCards[3].dataset.value).toBe('4.8/5');
+  });
+  
+  // Clean up after tests
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+});
+
+// Create a vitest.config.js file in the project root
+/*
+// vitest.config.js
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'happy-dom',
+    setupFiles: ['./src/test/setup.js'],
+    include: ['**/*.{test,spec}.{js,jsx,ts,tsx}'],
+    coverage: {
+      reporter: ['text', 'html'],
+      exclude: ['node_modules/', 'src/test/'],
+    },
+    globals: true
+  },
+});
+*/
+
+// Create a setup file for tests
+/*
+// src/test/setup.js
+import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+// Mock matchMedia for tests
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+*/
+
+// To run the tests, add these scripts to package.json:
+/*
+"scripts": {
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "test:coverage": "vitest run --coverage"
+}
+*/
+
+// Then run the tests with:
+// npm test

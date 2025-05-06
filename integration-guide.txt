@@ -1,0 +1,305 @@
+# Integrating AI Employees with Pizza Operations Dashboard
+
+This guide will walk you through integrating the AI Employees monitoring system with your Pizza Operations Dashboard.
+
+## 1. Add API Service for AI Employees
+
+First, create a new service file to handle API calls to your AI employee system:
+
+```javascript
+// src/services/aiEmployeeService.js
+import axios from 'axios';
+
+// Base configuration
+const aiEmployeeApi = axios.create({
+  baseURL: import.meta.env.VITE_AI_EMPLOYEE_API_URL || '/api/ai',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add auth interceptor if needed
+aiEmployeeApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// API methods for AI employees
+export const aiEmployeeService = {
+  // Get status of all AI employees
+  getAllStatus: () => aiEmployeeApi.get('/status'),
+  
+  // Get detailed status of specific AI employee
+  getEmployeeStatus: (employeeId) => aiEmployeeApi.get(`/${employeeId}/status`),
+  
+  // Get recent activity for an AI employee
+  getEmployeeActivity: (employeeId) => aiEmployeeApi.get(`/${employeeId}/activity`),
+  
+  // Control commands for AI employees
+  startTask: (employeeId, taskData) => aiEmployeeApi.post(`/${employeeId}/start`, taskData),
+  pauseTask: (employeeId) => aiEmployeeApi.post(`/${employeeId}/pause`),
+  stopTask: (employeeId) => aiEmployeeApi.post(`/${employeeId}/stop`),
+  
+  // Alert management
+  getAlerts: (params) => aiEmployeeApi.get('/alerts', { params }),
+  resolveAlert: (alertId) => aiEmployeeApi.post(`/alerts/${alertId}/resolve`),
+  
+  // Communication log
+  getCommunicationLog: (params) => aiEmployeeApi.get('/communication', { params }),
+};
+
+// Webhook listener setup
+export const setupWebhookListener = (callback) => {
+  // In a real implementation, this would be a WebSocket connection
+  // For demonstration, we'll use a polling mechanism
+  
+  const intervalId = setInterval(async () => {
+    try {
+      const response = await aiEmployeeApi.get('/updates');
+      if (response.data && response.data.length > 0) {
+        response.data.forEach(update => {
+          callback(update);
+        });
+      }
+    } catch (error) {
+      console.error('Error polling for updates:', error);
+    }
+  }, 5000); // Poll every 5 seconds
+  
+  // Return a function to clean up the interval
+  return () => clearInterval(intervalId);
+};
+
+export default aiEmployeeService;
+```
+
+## 2. Create a Custom Hook for AI Employees
+
+Next, create a React hook to manage the state and logic for AI employees:
+
+```javascript
+// src/hooks/useAIEmployees.js
+import { useState, useEffect, useCallback } from 'react';
+import { aiEmployeeService, setupWebhookListener } from '../services/aiEmployeeService';
+
+export default function useAIEmployees() {
+  const [employees, setEmployees] = useState({});
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [communicationLog, setCommunicationLog] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch all employee statuses
+  const fetchAllStatus = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await aiEmployeeService.getAllStatus();
+      const employeeData = response.data.reduce((acc, employee) => {
+        acc[employee.id] = employee;
+        return acc;
+      }, {});
+      
+      setEmployees(employeeData);
+      
+      // If no employee is selected yet, select the first one
+      if (!selectedEmployee && response.data.length > 0) {
+        setSelectedEmployee(response.data[0].id);
+      }
+    } catch (err) {
+      console.error('Error fetching AI employee status:', err);
+      setError(err.message || 'Failed to fetch AI employee status');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedEmployee]);
+
+  // Fetch alerts
+  const fetchAlerts = useCallback(async () => {
+    try {
+      const response = await aiEmployeeService.getAlerts({ status: 'unresolved' });
+      setAlerts(response.data);
+    } catch (err) {
+      console.error('Error fetching alerts:', err);
+    }
+  }, []);
+
+  // Fetch communication log
+  const fetchCommunicationLog = useCallback(async () => {
+    try {
+      const response = await aiEmployeeService.getCommunicationLog({ limit: 20 });
+      setCommunicationLog(response.data);
+    } catch (err) {
+      console.error('Error fetching communication log:', err);
+    }
+  }, []);
+
+  // Handle webhook updates
+  const handleUpdate = useCallback((update) => {
+    if (update.type === 'employee_status') {
+      setEmployees(prev => ({
+        ...prev,
+        [update.employeeId]: {
+          ...prev[update.employeeId],
+          ...update.data
+        }
+      }));
+    } else if (update.type === 'alert') {
+      setAlerts(prev => [update.data, ...prev]);
+    } else if (update.type === 'communication') {
+      setCommunicationLog(prev => [update.data, ...prev]);
+    }
+  }, []);
+
+  // Initialize data and set up webhook listener
+  useEffect(() => {
+    // Fetch initial data
+    fetchAllStatus();
+    fetchAlerts();
+    fetchCommunicationLog();
+    
+    // Set up webhook listener
+    const unsubscribe = setupWebhookListener(handleUpdate);
+    
+    // Clean up
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchAllStatus, fetchAlerts, fetchCommunicationLog, handleUpdate]);
+
+  // Control functions
+  const startTask = async (employeeId, taskData) => {
+    try {
+      await aiEmployeeService.startTask(employeeId, taskData);
+      fetchAllStatus(); // Refresh status after command
+    } catch (err) {
+      console.error(`Error starting task for ${employeeId}:`, err);
+      throw err;
+    }
+  };
+
+  const pauseTask = async (employeeId) => {
+    try {
+      await aiEmployeeService.pauseTask(employeeId);
+      fetchAllStatus(); // Refresh status after command
+    } catch (err) {
+      console.error(`Error pausing task for ${employeeId}:`, err);
+      throw err;
+    }
+  };
+
+  const stopTask = async (employeeId) => {
+    try {
+      await aiEmployeeService.stopTask(employeeId);
+      fetchAllStatus(); // Refresh status after command
+    } catch (err) {
+      console.error(`Error stopping task for ${employeeId}:`, err);
+      throw err;
+    }
+  };
+
+  const resolveAlert = async (alertId) => {
+    try {
+      await aiEmployeeService.resolveAlert(alertId);
+      // Update local state to reflect the change
+      setAlerts(alerts.filter(alert => alert.id !== alertId));
+    } catch (err) {
+      console.error(`Error resolving alert ${alertId}:`, err);
+      throw err;
+    }
+  };
+
+  return {
+    employees,
+    selectedEmployee,
+    setSelectedEmployee,
+    alerts,
+    communicationLog,
+    isLoading,
+    error,
+    startTask,
+    pauseTask,
+    stopTask,
+    resolveAlert,
+    refresh: {
+      status: fetchAllStatus,
+      alerts: fetchAlerts,
+      communication: fetchCommunicationLog
+    }
+  };
+}
+```
+
+## 3. Update the App.js Routes
+
+Add a new route for the AI Employee Monitor:
+
+```javascript
+// src/App.jsx
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import MainLayout from './components/layout/MainLayout';
+import Dashboard from './pages/Dashboard';
+import Orders from './pages/Orders';
+import Inventory from './pages/Inventory';
+import Employees from './pages/Employees';
+import AIEmployeesMonitor from './pages/AIEmployeesMonitor'; // Import the new page
+import NotFound from './pages/NotFound';
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <MainLayout />,
+    children: [
+      {
+        index: true,
+        element: <Dashboard />,
+      },
+      {
+        path: "orders",
+        element: <Orders />,
+      },
+      {
+        path: "inventory",
+        element: <Inventory />,
+      },
+      {
+        path: "employees",
+        element: <Employees />,
+      },
+      {
+        path: "ai-employees", // Add new route
+        element: <AIEmployeesMonitor />,
+      },
+      {
+        path: "*",
+        element: <NotFound />,
+      },
+    ],
+  },
+]);
+
+function App() {
+  return <RouterProvider router={router} />;
+}
+
+export default App;
+```
+
+## 4. Create the AI Employees Monitor Page
+
+Create a new page component that will use the AI Employees Monitor component:
+
+```javascript
+// src/pages/AIEmployeesMonitor.jsx
+import { useEffect } from 'react';
+import useAI

@@ -1,0 +1,252 @@
+// src/pages/Inventory.tsx
+import { useState } from 'react';
+import InventoryTable from '../components/inventory/InventoryTable';
+import InventorySummary from '../components/inventory/InventorySummary';
+import AddInventoryItemModal from '../components/inventory/AddInventoryItemModal';
+import UpdateInventoryModal from '../components/inventory/UpdateInventoryModal';
+
+const Inventory = () => {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  
+  const handleAddItem = () => {
+    setShowAddModal(true);
+  };
+  
+  const handleUpdateItem = (item) => {
+    setSelectedItem(item);
+    setShowUpdateModal(true);
+  };
+  
+  const handleSearch = (e) => {
+    setSearchQuery(e.target.value);
+  };
+  
+  const handleCategoryChange = (e) => {
+    setCategoryFilter(e.target.value);
+  };
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold text-gray-800">Inventory Management</h1>
+        <button 
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          onClick={handleAddItem}
+        >
+          Add New Item
+        </button>
+      </div>
+      
+      <InventorySummary />
+      
+      <div className="bg-white p-4 rounded-lg shadow">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="md:col-span-3">
+            <input
+              type="text"
+              placeholder="Search inventory..."
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={searchQuery}
+              onChange={handleSearch}
+            />
+          </div>
+          
+          <div>
+            <select
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={categoryFilter}
+              onChange={handleCategoryChange}
+            >
+              <option value="all">All Categories</option>
+              <option value="dough">Dough & Bases</option>
+              <option value="cheese">Cheese</option>
+              <option value="meat">Meat Toppings</option>
+              <option value="veggie">Veggie Toppings</option>
+              <option value="sauce">Sauces</option>
+              <option value="packaging">Packaging</option>
+              <option value="beverage">Beverages</option>
+            </select>
+          </div>
+        </div>
+        
+        <InventoryTable 
+          searchQuery={searchQuery}
+          categoryFilter={categoryFilter}
+          onUpdateItem={handleUpdateItem}
+        />
+      </div>
+      
+      {showAddModal && (
+        <AddInventoryItemModal onClose={() => setShowAddModal(false)} />
+      )}
+      
+      {showUpdateModal && selectedItem && (
+        <UpdateInventoryModal 
+          item={selectedItem} 
+          onClose={() => setShowUpdateModal(false)} 
+        />
+      )}
+    </div>
+  );
+};
+
+export default Inventory;
+
+// src/components/inventory/InventorySummary.tsx
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+const InventorySummary = () => {
+  // Mock data for inventory summary
+  const summaryData = [
+    { 
+      name: 'Low Stock', 
+      count: 5, 
+      color: '#EF4444', // red-500
+      items: ['Pepperoni', 'Bell Peppers', 'Black Olives', 'Pizza Boxes (Large)', 'Napkins'] 
+    },
+    { 
+      name: 'Need to Reorder', 
+      count: 8, 
+      color: '#F59E0B', // amber-500
+      items: ['Mozzarella Cheese', 'Pizza Sauce', 'Mushrooms', 'Italian Sausage', 'Bacon', 'Garlic', 'Onions', 'Ranch Dressing'] 
+    },
+    { 
+      name: 'In Stock', 
+      count: 42, 
+      color: '#10B981', // emerald-500
+      items: [] // Would be a much longer list
+    },
+    { 
+      name: 'Expiring Soon', 
+      count: 3, 
+      color: '#6366F1', // indigo-500
+      items: ['Ground Beef', 'Fresh Basil', 'Spinach'] 
+    }
+  ];
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow">
+      <h2 className="text-lg font-medium mb-4">Inventory Overview</h2>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={summaryData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  formatter={(value, name, props) => {
+                    return [
+                      `${value} items`,
+                      name
+                    ];
+                  }}
+                />
+                <Bar dataKey="count">
+                  {summaryData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="font-medium text-gray-900 mb-2">Attention Required</h3>
+          
+          <div className="space-y-4">
+            {summaryData.slice(0, 3).map((category) => (
+              <div key={category.name} className="border border-gray-200 rounded p-3">
+                <div className="flex items-center mb-2">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-2" 
+                    style={{ backgroundColor: category.color }}
+                  ></div>
+                  <h4 className="font-medium">{category.name}: {category.count}</h4>
+                </div>
+                {category.items.length > 0 && (
+                  <ul className="text-sm text-gray-500 ml-5 list-disc">
+                    {category.items.slice(0, 3).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                    {category.items.length > 3 && (
+                      <li className="text-blue-500">+{category.items.length - 3} more</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default InventorySummary;
+
+// src/components/inventory/InventoryTable.tsx
+import { useState, useEffect } from 'react';
+
+// Sample inventory data
+const inventoryData = [
+  {
+    id: 1,
+    name: 'Pizza Dough',
+    category: 'dough',
+    quantity: 125,
+    unit: 'balls',
+    minLevel: 50,
+    reorderLevel: 75,
+    costPerUnit: 0.85,
+    supplier: 'Dough Masters',
+    lastRestocked: '2025-04-25',
+  },
+  {
+    id: 2,
+    name: 'Mozzarella Cheese',
+    category: 'cheese',
+    quantity: 32,
+    unit: 'lbs',
+    minLevel: 15,
+    reorderLevel: 40,
+    costPerUnit: 3.25,
+    supplier: 'Dairy Delights',
+    lastRestocked: '2025-04-22',
+  },
+  {
+    id: 3,
+    name: 'Pepperoni',
+    category: 'meat',
+    quantity: 12,
+    unit: 'lbs',
+    minLevel: 15,
+    reorderLevel: 25,
+    costPerUnit: 4.50,
+    supplier: 'Meat Masters',
+    lastRestocked: '2025-04-20',
+  },
+  {
+    id: 4,
+    name: 'Pizza Sauce',
+    category: 'sauce',
+    quantity: 18,
+    unit: 'gallons',
+    minLevel: 10,
+    reorderLevel: 20,
+    costPerUnit: 6.

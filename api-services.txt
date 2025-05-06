@@ -1,0 +1,532 @@
+// src/services/api.js
+import axios from 'axios';
+
+// Create an axios instance with common configuration
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor for authentication
+api.interceptors.request.use(
+  (config) => {
+    // Get token from localStorage or secure storage
+    const token = localStorage.getItem('auth_token');
+    
+    // Add token to headers if it exists
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    // Handle authentication errors
+    if (error.response && error.response.status === 401) {
+      // Redirect to login or refresh token
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+// Dashboard API
+export const dashboardApi = {
+  getStats: () => api.get('/dashboard/stats'),
+  getSalesData: (period = 'year') => api.get(`/dashboard/sales?period=${period}`),
+  getTopSellingItems: (limit = 5) => api.get(`/dashboard/top-selling?limit=${limit}`),
+  getRecentOrders: (limit = 5) => api.get(`/dashboard/recent-orders?limit=${limit}`),
+  getOrdersByLocation: () => api.get('/dashboard/orders-by-location'),
+};
+
+// Orders API
+export const ordersApi = {
+  getOrders: (params) => api.get('/orders', { params }),
+  getOrderById: (id) => api.get(`/orders/${id}`),
+  createOrder: (data) => api.post('/orders', data),
+  updateOrder: (id, data) => api.put(`/orders/${id}`, data),
+  deleteOrder: (id) => api.delete(`/orders/${id}`),
+  updateOrderStatus: (id, status) => api.patch(`/orders/${id}/status`, { status }),
+};
+
+// Inventory API
+export const inventoryApi = {
+  getInventoryItems: (params) => api.get('/inventory', { params }),
+  getInventoryItemById: (id) => api.get(`/inventory/${id}`),
+  createInventoryItem: (data) => api.post('/inventory', data),
+  updateInventoryItem: (id, data) => api.put(`/inventory/${id}`, data),
+  deleteInventoryItem: (id) => api.delete(`/inventory/${id}`),
+  adjustInventoryQuantity: (id, adjustment, reason) => 
+    api.patch(`/inventory/${id}/quantity`, { adjustment, reason }),
+};
+
+// Employees API
+export const employeesApi = {
+  getEmployees: (params) => api.get('/employees', { params }),
+  getEmployeeById: (id) => api.get(`/employees/${id}`),
+  createEmployee: (data) => api.post('/employees', data),
+  updateEmployee: (id, data) => api.put(`/employees/${id}`, data),
+  deleteEmployee: (id) => api.delete(`/employees/${id}`),
+  getEmployeeSchedule: (id, params) => api.get(`/employees/${id}/schedule`, { params }),
+  updateEmployeeSchedule: (id, data) => api.put(`/employees/${id}/schedule`, data),
+};
+
+// Authentication API
+export const authApi = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  logout: () => api.post('/auth/logout'),
+  refreshToken: () => api.post('/auth/refresh'),
+  getCurrentUser: () => api.get('/auth/me'),
+  updatePassword: (data) => api.put('/auth/password', data),
+};
+
+export default api;
+
+// src/hooks/useDashboard.js
+import { useState, useEffect } from 'react';
+import { dashboardApi } from '../services/api';
+
+export default function useDashboard() {
+  const [stats, setStats] = useState(null);
+  const [salesData, setSalesData] = useState([]);
+  const [topSellingItems, setTopSellingItems] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [ordersByLocation, setOrdersByLocation] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Fetch all dashboard data in parallel
+      const [
+        statsResponse,
+        salesResponse,
+        topSellingResponse,
+        recentOrdersResponse,
+        locationResponse
+      ] = await Promise.all([
+        dashboardApi.getStats(),
+        dashboardApi.getSalesData(),
+        dashboardApi.getTopSellingItems(),
+        dashboardApi.getRecentOrders(),
+        dashboardApi.getOrdersByLocation()
+      ]);
+      
+      // Update state with the fetched data
+      setStats(statsResponse.data);
+      setSalesData(salesResponse.data);
+      setTopSellingItems(topSellingResponse.data);
+      setRecentOrders(recentOrdersResponse.data);
+      setOrdersByLocation(locationResponse.data);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err.message || 'Failed to fetch dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  return {
+    stats,
+    salesData,
+    topSellingItems,
+    recentOrders,
+    ordersByLocation,
+    isLoading,
+    error,
+    refetch: fetchDashboardData
+  };
+}
+
+// src/hooks/useOrders.js
+import { useState, useEffect, useCallback } from 'react';
+import { ordersApi } from '../services/api';
+
+export default function useOrders(initialFilters = {}) {
+  const [orders, setOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState(initialFilters);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0
+  });
+
+  const fetchOrders = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const params = {
+        ...filters,
+        page: pagination.page,
+        limit: pagination.limit
+      };
+      
+      const response = await ordersApi.getOrders(params);
+      
+      setOrders(response.data.orders);
+      setPagination({
+        ...pagination,
+        total: response.data.total
+      });
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError(err.message || 'Failed to fetch orders');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters, pagination.page, pagination.limit]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const updateFilters = (newFilters) => {
+    setFilters(prev => ({
+      ...prev,
+      ...newFilters
+    }));
+    // Reset to first page when filters change
+    setPagination(prev => ({
+      ...prev,
+      page: 1
+    }));
+  };
+
+  const changePage = (page) => {
+    setPagination(prev => ({
+      ...prev,
+      page
+    }));
+  };
+
+  const getOrderById = async (id) => {
+    try {
+      const response = await ordersApi.getOrderById(id);
+      return response.data;
+    } catch (err) {
+      console.error(`Error fetching order ${id}:`, err);
+      throw err;
+    }
+  };
+
+  const createOrder = async (data) => {
+    try {
+      const response = await ordersApi.createOrder(data);
+      // Refetch to update the list
+      fetchOrders();
+      return response.data;
+    } catch (err) {
+      console.error('Error creating order:', err);
+      throw err;
+    }
+  };
+
+  const updateOrder = async (id, data) => {
+    try {
+      const response = await ordersApi.updateOrder(id, data);
+      // Update the local state to avoid refetching
+      setOrders(orders.map(order => 
+        order.id === id ? { ...order, ...response.data } : order
+      ));
+      return response.data;
+    } catch (err) {
+      console.error(`Error updating order ${id}:`, err);
+      throw err;
+    }
+  };
+
+  const updateOrderStatus = async (id, status) => {
+    try {
+      const response = await ordersApi.updateOrderStatus(id, status);
+      // Update the local state to avoid refetching
+      setOrders(orders.map(order => 
+        order.id === id ? { ...order, status } : order
+      ));
+      return response.data;
+    } catch (err) {
+      console.error(`Error updating order ${id} status:`, err);
+      throw err;
+    }
+  };
+
+  const deleteOrder = async (id) => {
+    try {
+      await ordersApi.deleteOrder(id);
+      // Update the local state to avoid refetching
+      setOrders(orders.filter(order => order.id !== id));
+    } catch (err) {
+      console.error(`Error deleting order ${id}:`, err);
+      throw err;
+    }
+  };
+
+  return {
+    orders,
+    isLoading,
+    error,
+    filters,
+    pagination,
+    updateFilters,
+    changePage,
+    getOrderById,
+    createOrder,
+    updateOrder,
+    updateOrderStatus,
+    deleteOrder,
+    refetch: fetchOrders
+  };
+}
+
+// src/hooks/useInventory.js
+import { useState, useEffect, useCallback } from 'react';
+import { inventoryApi } from '../services/api';
+
+export default function useInventory(initialFilters = {}) {
+  const [inventory, setInventory] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState(initialFilters);
+  
+  const fetchInventory = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await inventoryApi.getInventoryItems(filters);
+      setInventory(response.data);
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+      setError(err.message || 'Failed to fetch inventory');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    fetchInventory();
+  }, [fetchInventory]);
+
+  const updateFilters = (newFilters) => {
+    setFilters(prev => ({
+      ...prev,
+      ...newFilters
+    }));
+  };
+
+  const getItemById = async (id) => {
+    try {
+      const response = await inventoryApi.getInventoryItemById(id);
+      return response.data;
+    } catch (err) {
+      console.error(`Error fetching inventory item ${id}:`, err);
+      throw err;
+    }
+  };
+
+  const createItem = async (data) => {
+    try {
+      const response = await inventoryApi.createInventoryItem(data);
+      // Refetch to update the list
+      fetchInventory();
+      return response.data;
+    } catch (err) {
+      console.error('Error creating inventory item:', err);
+      throw err;
+    }
+  };
+
+  const updateItem = async (id, data) => {
+    try {
+      const response = await inventoryApi.updateInventoryItem(id, data);
+      // Update the local state to avoid refetching
+      setInventory(inventory.map(item => 
+        item.id === id ? { ...item, ...response.data } : item
+      ));
+      return response.data;
+    } catch (err) {
+      console.error(`Error updating inventory item ${id}:`, err);
+      throw err;
+    }
+  };
+
+  const deleteItem = async (id) => {
+    try {
+      await inventoryApi.deleteInventoryItem(id);
+      // Update the local state to avoid refetching
+      setInventory(inventory.filter(item => item.id !== id));
+    } catch (err) {
+      console.error(`Error deleting inventory item ${id}:`, err);
+      throw err;
+    }
+  };
+
+  const adjustQuantity = async (id, adjustment, reason) => {
+    try {
+      const response = await inventoryApi.adjustInventoryQuantity(id, adjustment, reason);
+      // Update the local state to avoid refetching
+      setInventory(inventory.map(item => 
+        item.id === id ? { ...item, quantity: response.data.quantity } : item
+      ));
+      return response.data;
+    } catch (err) {
+      console.error(`Error adjusting inventory quantity for item ${id}:`, err);
+      throw err;
+    }
+  };
+
+  // Get low stock items
+  const getLowStockItems = () => {
+    return inventory.filter(item => item.quantity <= item.minLevel);
+  };
+
+  // Get items that need to be reordered
+  const getReorderItems = () => {
+    return inventory.filter(item => item.quantity <= item.reorderLevel && item.quantity > item.minLevel);
+  };
+
+  return {
+    inventory,
+    isLoading,
+    error,
+    filters,
+    updateFilters,
+    getItemById,
+    createItem,
+    updateItem,
+    deleteItem,
+    adjustQuantity,
+    getLowStockItems,
+    getReorderItems,
+    refetch: fetchInventory
+  };
+}
+
+// src/hooks/useAuth.js
+import { useState, useEffect } from 'react';
+import { authApi } from '../services/api';
+
+export default function useAuth() {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Check if user is already logged in (has token in localStorage)
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        const response = await authApi.getCurrentUser();
+        setUser(response.data);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error('Error verifying user:', err);
+        // Clear invalid token
+        localStorage.removeItem('auth_token');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
+
+  const login = async (credentials) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await authApi.login(credentials);
+      const { token, user } = response.data;
+      
+      // Store token in localStorage
+      localStorage.setItem('auth_token', token);
+      
+      // Update state
+      setUser(user);
+      setIsAuthenticated(true);
+      
+      return user;
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || 'Login failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    setIsLoading(true);
+    
+    try {
+      // Call logout API
+      await authApi.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      // Clear token regardless of API response
+      localStorage.removeItem('auth_token');
+      
+      // Reset state
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsLoading(false);
+    }
+  };
+
+  const updatePassword = async (data) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await authApi.updatePassword(data);
+    } catch (err) {
+      console.error('Error updating password:', err);
+      setError(err.response?.data?.message || 'Failed to update password');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    user,
+    isLoading,
+    error,
+    isAuthenticated,
+    login,
+    logout,
+    updatePassword
+  };
+}

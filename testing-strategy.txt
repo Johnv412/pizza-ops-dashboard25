@@ -1,0 +1,359 @@
+# Testing Strategy for Pizza Operations Dashboard
+
+## 1. Unit Testing
+
+We'll use Vitest with React Testing Library to create unit tests for individual components.
+
+### Example Component Test
+
+```jsx
+// src/components/dashboard/KPICard.test.jsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import KPICard from './KPICard';
+
+describe('KPICard', () => {
+  it('renders correctly with positive change', () => {
+    render(
+      <KPICard 
+        title="Total Sales" 
+        value="$12,458" 
+        change="+12.5%" 
+        isPositive={true} 
+        icon="currency"
+      />
+    );
+    
+    expect(screen.getByText('Total Sales')).toBeInTheDocument();
+    expect(screen.getByText('$12,458')).toBeInTheDocument();
+    expect(screen.getByText('+12.5%')).toBeInTheDocument();
+    // We can also check for the presence of the icon and positive styling
+  });
+  
+  it('renders correctly with negative change', () => {
+    render(
+      <KPICard 
+        title="Customer Satisfaction" 
+        value="4.8/5" 
+        change="-0.2%" 
+        isPositive={false} 
+        icon="customer"
+      />
+    );
+    
+    expect(screen.getByText('Customer Satisfaction')).toBeInTheDocument();
+    expect(screen.getByText('4.8/5')).toBeInTheDocument();
+    expect(screen.getByText('-0.2%')).toBeInTheDocument();
+    // Check for negative styling
+  });
+});
+```
+
+### Example Hook Test
+
+```jsx
+// src/hooks/useInventory.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import useInventory from './useInventory';
+
+// Mock the API service
+vi.mock('../services/api', () => ({
+  getInventoryItems: vi.fn(() => Promise.resolve([
+    { id: 1, name: 'Pizza Dough', quantity: 125 },
+    { id: 2, name: 'Mozzarella Cheese', quantity: 32 }
+  ])),
+  updateInventoryItem: vi.fn(() => Promise.resolve({ success: true }))
+}));
+
+describe('useInventory', () => {
+  it('loads inventory items on initialization', async () => {
+    const { result, waitForNextUpdate } = renderHook(() => useInventory());
+    
+    // Initially loading
+    expect(result.current.isLoading).toBe(true);
+    
+    // Wait for the hook to process
+    await waitForNextUpdate();
+    
+    // Check the final state
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.items.length).toBe(2);
+    expect(result.current.items[0].name).toBe('Pizza Dough');
+  });
+  
+  it('updates inventory item correctly', async () => {
+    const { result, waitForNextUpdate } = renderHook(() => useInventory());
+    
+    // Wait for initial load
+    await waitForNextUpdate();
+    
+    // Update an item
+    await act(async () => {
+      await result.current.updateItem(1, { quantity: 150 });
+    });
+    
+    // Check if the item was updated in the state
+    expect(result.current.items.find(item => item.id === 1).quantity).toBe(150);
+  });
+});
+```
+
+## 2. Integration Testing
+
+Integration tests ensure that components work together as expected.
+
+```jsx
+// src/pages/Orders.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import Orders from './Orders';
+
+// Mock the components to isolate this test
+vi.mock('../components/orders/OrdersTable', () => ({
+  default: ({ onOrderSelect }) => (
+    <div data-testid="orders-table">
+      <button onClick={() => onOrderSelect({ id: 'ORD-123' })}>
+        Select Order
+      </button>
+    </div>
+  )
+}));
+
+vi.mock('../components/orders/OrderDetail', () => ({
+  default: ({ order, onClose }) => (
+    <div data-testid="order-detail">
+      Order ID: {order.id}
+      <button onClick={onClose}>Close</button>
+    </div>
+  )
+}));
+
+describe('Orders Page', () => {
+  it('shows order detail when an order is selected', async () => {
+    render(<Orders />);
+    
+    // Initially, the order detail should not be visible
+    expect(screen.queryByTestId('order-detail')).not.toBeInTheDocument();
+    
+    // Select an order
+    fireEvent.click(screen.getByText('Select Order'));
+    
+    // Order detail should be visible now
+    await waitFor(() => {
+      expect(screen.getByTestId('order-detail')).toBeInTheDocument();
+      expect(screen.getByText('Order ID: ORD-123')).toBeInTheDocument();
+    });
+    
+    // Close the detail
+    fireEvent.click(screen.getByText('Close'));
+    
+    // Order detail should be hidden again
+    await waitFor(() => {
+      expect(screen.queryByTestId('order-detail')).not.toBeInTheDocument();
+    });
+  });
+});
+```
+
+## 3. API Mocking with MSW
+
+Mock Service Worker (MSW) allows us to intercept network requests for testing.
+
+```jsx
+// src/mocks/handlers.js
+import { rest } from 'msw';
+
+export const handlers = [
+  // GET inventory items
+  rest.get('/api/inventory', (req, res, ctx) => {
+    return res(
+      ctx.status(200),
+      ctx.json([
+        { id: 1, name: 'Pizza Dough', quantity: 125 },
+        { id: 2, name: 'Mozzarella Cheese', quantity: 32 }
+      ])
+    );
+  }),
+  
+  // Update inventory item
+  rest.put('/api/inventory/:id', (req, res, ctx) => {
+    const { id } = req.params;
+    const data = req.body;
+    
+    return res(
+      ctx.status(200),
+      ctx.json({
+        id: Number(id),
+        ...data,
+        updated: true
+      })
+    );
+  }),
+  
+  // GET orders
+  rest.get('/api/orders', (req, res, ctx) => {
+    return res(
+      ctx.status(200),
+      ctx.json([
+        // Order data here
+      ])
+    );
+  }),
+];
+```
+
+```jsx
+// src/mocks/server.js
+import { setupServer } from 'msw/node';
+import { handlers } from './handlers';
+
+export const server = setupServer(...handlers);
+```
+
+```jsx
+// src/setupTests.js
+import { server } from './mocks/server';
+import '@testing-library/jest-dom';
+
+// Start the server before all tests
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+
+// Reset handlers after each test
+afterEach(() => server.resetHandlers());
+
+// Close server after all tests
+afterAll(() => server.close());
+```
+
+## 4. End-to-End Testing
+
+For E2E testing, we can use Playwright or Cypress to simulate real user interactions.
+
+```javascript
+// e2e/dashboard.spec.js (Playwright example)
+import { test, expect } from '@playwright/test';
+
+test('dashboard loads and displays correct KPIs', async ({ page }) => {
+  // Go to the homepage
+  await page.goto('http://localhost:5173/');
+  
+  // Check if the dashboard title is visible
+  await expect(page.locator('h1')).toContainText('Dashboard');
+  
+  // Check if all KPI cards are displayed
+  await expect(page.locator('.kpi-card')).toHaveCount(4);
+  
+  // Check specific KPI values
+  await expect(page.locator('.kpi-card').nth(0)).toContainText('Total Sales');
+  await expect(page.locator('.kpi-card').nth(0)).toContainText('$12,458');
+});
+
+test('orders page shows filtered results when filters are applied', async ({ page }) => {
+  // Go to the orders page
+  await page.goto('http://localhost:5173/orders');
+  
+  // Check initial orders count
+  const initialOrderCount = await page.locator('table tbody tr').count();
+  
+  // Filter by status
+  await page.selectOption('#status', 'delivered');
+  
+  // Check that the orders list has been filtered
+  const filteredOrderCount = await page.locator('table tbody tr').count();
+  expect(filteredOrderCount).toBeLessThan(initialOrderCount);
+  
+  // Check that all visible orders have the correct status
+  const statuses = await page.locator('table tbody tr .status-badge').allTextContents();
+  for (const status of statuses) {
+    expect(status.trim()).toBe('Delivered');
+  }
+});
+```
+
+## 5. Setting Up Testing Scripts
+
+Add the following to your `package.json`:
+
+```json
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "test:ui": "vitest --ui",
+  "test:coverage": "vitest run --coverage",
+  "test:e2e": "playwright test"
+}
+```
+
+## 6. Useful Testing Utilities
+
+Create reusable testing utilities:
+
+```jsx
+// src/utils/test-utils.jsx
+import { render } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+
+// Custom render function that includes providers
+export function renderWithProviders(ui, options = {}) {
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <BrowserRouter>
+        {children}
+      </BrowserRouter>
+    ),
+    ...options
+  });
+}
+
+// Helper to mock chart components from recharts
+export const mockRecharts = () => {
+  vi.mock('recharts', () => {
+    const OriginalModule = vi.importActual('recharts');
+    
+    return {
+      ...OriginalModule,
+      ResponsiveContainer: ({ children }) => <div data-testid="responsive-container">{children}</div>,
+      AreaChart: ({ children }) => <div data-testid="area-chart">{children}</div>,
+      BarChart: ({ children }) => <div data-testid="bar-chart">{children}</div>,
+      // Mock other chart components as needed
+    };
+  });
+};
+```
+
+## 7. Snapshot Testing
+
+Use snapshot testing for UI stability:
+
+```jsx
+// src/components/dashboard/SalesChart.test.jsx
+import { describe, it, expect, beforeAll } from 'vitest';
+import { render } from '@testing-library/react';
+import { mockRecharts } from '../../utils/test-utils';
+import SalesChart from './SalesChart';
+
+// Mock Recharts components
+beforeAll(() => {
+  mockRecharts();
+});
+
+describe('SalesChart', () => {
+  it('renders correctly and matches snapshot', () => {
+    const { container } = render(<SalesChart />);
+    expect(container).toMatchSnapshot();
+  });
+});
+```
+
+## 8. Next Steps
+
+1. Create these test files in your project
+2. Run `npm test` to execute all tests
+3. Implement CI/CD pipeline that runs tests on each commit
+4. Set up test coverage thresholds to maintain code quality
+
+With this comprehensive testing strategy, you can ensure that your Pizza Operations Dashboard functions correctly and remains resilient to changes.

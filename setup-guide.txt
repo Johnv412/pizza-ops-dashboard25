@@ -1,0 +1,330 @@
+# Pizza Operations Dashboard - Setup and Testing Guide
+
+This guide will walk you through setting up the Pizza Operations Dashboard application, running it locally, and executing the test suite.
+
+## Prerequisites
+
+- Node.js (v18 or later)
+- npm (v8 or later)
+
+## Part 1: Project Setup
+
+### 1. Clone and Install Dependencies
+
+```bash
+# Create a new project directory
+mkdir pizza-ops-dashboard
+cd pizza-ops-dashboard
+
+# Initialize a new Vite project with React
+npm create vite@latest . -- --template react
+
+# Install dependencies
+npm install react-router-dom recharts axios tailwindcss autoprefixer postcss
+
+# Install development dependencies
+npm install -D @testing-library/react @testing-library/jest-dom vitest happy-dom msw eslint eslint-plugin-react eslint-plugin-react-hooks prettier
+```
+
+### 2. Set Up Tailwind CSS
+
+```bash
+# Initialize Tailwind CSS
+npx tailwindcss init -p
+```
+
+Update `tailwind.config.js`:
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+```
+
+Update `src/index.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+### 3. Configure Testing
+
+Create `vitest.config.js` in the project root:
+
+```javascript
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'happy-dom',
+    setupFiles: ['./src/test/setup.js'],
+    include: ['**/*.{test,spec}.{js,jsx,ts,tsx}'],
+    coverage: {
+      reporter: ['text', 'html'],
+      exclude: ['node_modules/', 'src/test/'],
+    },
+    globals: true
+  },
+});
+```
+
+Create test setup file at `src/test/setup.js`:
+
+```javascript
+import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+// Mock matchMedia for tests
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+```
+
+### 4. Set Up MSW for API Mocking
+
+Create mock handlers file at `src/mocks/handlers.js`:
+
+```javascript
+import { rest } from 'msw';
+
+export const handlers = [
+  // Dashboard endpoints
+  rest.get('/api/dashboard/stats', (req, res, ctx) => {
+    return res(
+      ctx.status(200),
+      ctx.json({
+        totalSales: 12458,
+        orderCount: 324,
+        avgOrderValue: 38.45,
+        customerSatisfaction: 4.8
+      })
+    );
+  }),
+  
+  // Add more mock handlers for your API endpoints
+];
+```
+
+Create server setup file at `src/mocks/server.js`:
+
+```javascript
+import { setupServer } from 'msw/node';
+import { handlers } from './handlers';
+
+export const server = setupServer(...handlers);
+```
+
+Create browser mock setup at `src/mocks/browser.js`:
+
+```javascript
+import { setupWorker } from 'msw';
+import { handlers } from './handlers';
+
+export const worker = setupWorker(...handlers);
+```
+
+### 5. Update `package.json` Scripts
+
+Add these scripts to your `package.json`:
+
+```json
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "test:ui": "vitest --ui",
+  "test:coverage": "vitest run --coverage",
+  "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+  "format": "prettier --write \"src/**/*.{js,jsx}\""
+}
+```
+
+## Part 2: Project Structure
+
+Create the following folder structure:
+
+```
+src/
+├── components/
+│   ├── common/
+│   ├── dashboard/
+│   ├── inventory/
+│   ├── layout/
+│   └── orders/
+├── hooks/
+├── mocks/
+├── pages/
+├── services/
+├── test/
+└── utils/
+```
+
+## Part 3: Running the Application
+
+### 1. Start the Development Server
+
+```bash
+npm run dev
+```
+
+This will start the Vite development server, typically on http://localhost:5173.
+
+### 2. Mock API in Development
+
+Add this to your `src/main.jsx` file to enable API mocking in development:
+
+```javascript
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+
+async function bootstrap() {
+  // Initialize MSW in development environment
+  if (import.meta.env.DEV) {
+    const { worker } = await import('./mocks/browser');
+    await worker.start({
+      onUnhandledRequest: 'bypass', // Don't warn about unhandled requests
+    });
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+}
+
+bootstrap();
+```
+
+## Part 4: Running Tests
+
+### 1. Unit Tests
+
+To run unit tests once:
+
+```bash
+npm test
+```
+
+To run tests in watch mode:
+
+```bash
+npm run test:watch
+```
+
+### 2. Test Coverage
+
+To generate a test coverage report:
+
+```bash
+npm run test:coverage
+```
+
+This will create a coverage report in the `coverage` directory.
+
+### 3. Writing Tests
+
+Follow these best practices when writing tests:
+
+1. Create test files next to the component files with the `.test.jsx` extension
+2. Use descriptive test names with the pattern `it('should do something', ...)`
+3. Mock external dependencies like API calls and complex components
+4. Test user interactions using `fireEvent` or `userEvent` from Testing Library
+5. Use snapshots sparingly, only for stable UI components
+
+Example of a component test:
+
+```jsx
+import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import Button from './Button';
+
+describe('Button Component', () => {
+  it('renders with correct text', () => {
+    render(<Button>Click Me</Button>);
+    expect(screen.getByText('Click Me')).toBeInTheDocument();
+  });
+  
+  it('calls onClick handler when clicked', () => {
+    const handleClick = vi.fn();
+    render(<Button onClick={handleClick}>Click Me</Button>);
+    
+    fireEvent.click(screen.getByText('Click Me'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+  
+  it('applies the correct CSS class when primary prop is true', () => {
+    render(<Button primary>Primary Button</Button>);
+    const button = screen.getByText('Primary Button');
+    expect(button).toHaveClass('bg-blue-600');
+  });
+});
+```
+
+## Part 5: Building for Production
+
+To build the application for production:
+
+```bash
+npm run build
+```
+
+This will create a production-ready build in the `dist` directory.
+
+To preview the production build locally:
+
+```bash
+npm run preview
+```
+
+## Troubleshooting Common Issues
+
+1. **Tests failing with DOM-related errors**
+   - Make sure you're using the correct testing environment (`happy-dom` or `jsdom`)
+   - Check that you've imported the necessary Testing Library utilities
+
+2. **API mocking not working**
+   - Verify that the MSW worker is properly initialized
+   - Check that your mock handlers match the API endpoints your code is calling
+
+3. **React hooks errors in tests**
+   - Ensure components using hooks are properly wrapped in their required contexts
+   - Use the custom render function from `src/utils/test-utils.jsx`
+
+4. **Tailwind styles not applying**
+   - Check that your `tailwind.config.js` includes all the files in your project
+   - Make sure you've imported the Tailwind CSS directives in your main CSS file
+
+## Next Steps
+
+1. Implement authentication with JWT tokens
+2. Set up form validation with a library like Yup or Zod
+3. Add error boundaries to handle unexpected errors
+4. Implement proper logging for production
+5. Set up a CI/CD pipeline with GitHub Actions or similar

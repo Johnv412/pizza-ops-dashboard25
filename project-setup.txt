@@ -1,0 +1,81 @@
+# Pizza Operations Dashboard
+
+This guide will walk you through setting up and building the Pizza Operations Dashboard, a React-based application for managing pizza restaurant operations.
+
+## Project Setup
+
+1. Create a new project using Vite:
+
+```bash
+npm create vite@latest pizza-ops-dashboard -- --template react-ts
+cd pizza-ops-dashboard
+```
+
+2. Install the core dependencies:
+
+```bash
+npm install react@latest react-dom@latest react-router-dom@latest recharts tailwindcss autoprefixer postcss axios
+```
+
+3. Install development dependencies:
+
+```bash
+npm install -D @types/react @types/react-dom @vitejs/plugin-react eslint eslint-plugin-react eslint-plugin-react-hooks vitest @testing-library/react @testing-library/jest-dom happy-dom prettier
+```
+
+4. Set up Tailwind CSS:
+
+```bash
+npx tailwindcss init -p
+```
+
+5. Update `tailwind.config.js`:
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+```
+
+6. Update `src/index.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+7. Create basic folder structure:
+
+```
+src/
+├── components/
+│   ├── common/
+│   ├── dashboard/
+│   └── layout/
+├── pages/
+├── hooks/
+├── services/
+├── utils/
+├── types/
+└── assets/
+```
+
+## Project Initialization
+
+After setting up, make sure to run:
+
+```bash
+npm install
+npm run dev
+```
+
+Now, let's build the application components one by one.
