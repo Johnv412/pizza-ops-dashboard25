@@ -1,6 +1,6 @@
-# Backend Integration Manager
+# Pizza Ops Dashboard
 
-A comprehensive dashboard for managing backend integrations with external services like Square POS, SendGrid, and Twilio. This application provides a unified interface for connecting to external systems, managing webhooks, and processing orders.
+A modern operations dashboard for pizza businesses — built to streamline order management, third-party integrations, and real-time webhook event monitoring from a single interface.
 
 ## Table of Contents
 
@@ -17,22 +17,16 @@ A comprehensive dashboard for managing backend integrations with external servic
 
 ## Overview
 
-The Backend Integration Manager is a React-based frontend application that interfaces with a Node.js/Express backend to provide seamless integration with various third-party services. It allows users to:
-
-- Connect to external systems like Square POS, SendGrid, and Twilio
-- Manage active connections and their status
-- Register and monitor webhooks for event notifications
-- Process orders through Square POS
-- View real-time webhook events
+Pizza Ops Dashboard is a React-based single-page application that gives pizza restaurant operators full control over their daily operations. It connects to third-party platforms like Square POS, handles order creation and routing, and delivers a live feed of incoming webhook events — all from a clean, responsive interface.
 
 ## Features
 
-- **Integration Management**: Connect to and disconnect from external systems
-- **Webhook Management**: Register webhooks and view incoming webhook events
-- **Order Processing**: Create and submit orders to Square POS
-- **Real-time Updates**: Automatic polling for webhook events
-- **Responsive Design**: Works on desktop and mobile devices
-- **JWT Authentication**: Secure API access with JSON Web Tokens
+- **Order Management** — Create and submit customer orders directly to Square POS with dynamic line-item management, automatic total calculation, and support for card, cash, and online payment methods.
+- **Backend Integrations** — Connect to and disconnect from external services using an adapter-based system. Each adapter defines its own required credential fields, making it straightforward to extend to new platforms.
+- **Webhook Registration** — Register custom webhook endpoints and subscribe to specific business events (order created, payment received, inventory updated, and more).
+- **Live Webhook Event Feed** — Monitor incoming webhook events in real time with source filtering and automatic polling every 15 seconds.
+- **Collapsible Sidebar Navigation** — Responsive layout with a toggleable sidebar that works across screen sizes.
+- **JWT Authentication** — Secure API access with JSON Web Tokens.
 
 ## Architecture
 
@@ -47,34 +41,36 @@ graph TD
     C --> F[integrationService.js]
     D --> F
     E --> F
-    F --> G[Backend API]
-    G --> H[External Systems]
+    F --> G[Backend API /api/integration]
+    G --> H[Square POS / SendGrid / Twilio]
     H --> G
     G --> E
 ```
 
 ### Key Components
 
-- **App.jsx**: Main application component with routing
-- **AppContext.jsx**: Global state management
-- **IntegrationsPage.jsx**: Page for managing integrations and webhooks
-- **OrderForm.jsx**: Form for creating and submitting orders
-- **WebhookEventsComponent.jsx**: Component for displaying webhook events
-- **integrationService.js**: Service for communicating with the backend API
+| File | Responsibility |
+|---|---|
+| `App.jsx` | Root component — routing, sidebar, and layout |
+| `AppContext.jsx` | Global application state |
+| `IntegrationsPage.jsx` | Manage connections and webhook registrations |
+| `OrderForm.jsx` | Create and submit orders to Square POS |
+| `WebhookEventsComponent.jsx` | Live webhook event feed with source filtering |
+| `integrationService.js` | Axios service layer for all backend API calls |
 
 ## Installation
 
 ### Prerequisites
 
-- Node.js 16.x or higher
-- npm 8.x or higher
+- [Node.js](https://nodejs.org/) v18 or higher
+- npm v9 or higher
 
 ### Setup
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/backend-integration-manager.git
-   cd backend-integration-manager
+   git clone https://github.com/Johnv412/pizza-ops-dashboard25.git
+   cd pizza-ops-dashboard25
    ```
 
 2. Install dependencies:
@@ -82,7 +78,7 @@ graph TD
    npm install
    ```
 
-3. Create a `.env` file with the following variables:
+3. Create a `.env` file with the following variable:
    ```
    VITE_API_URL=http://localhost:3000
    ```
@@ -92,36 +88,67 @@ graph TD
    npm run dev
    ```
 
+   To run on a specific port:
+   ```bash
+   npx vite --port 4000
+   ```
+
 ## Development
 
 ### Project Structure
 
 ```
-backend-integration-manager/
-├── public/                  # Static assets
+pizza-ops-dashboard25/
+├── public/
 ├── src/
-│   ├── api/                 # API utilities
-│   ├── assets/              # Images, fonts, etc.
-│   ├── components/          # Reusable components
-│   │   ├── OrderForm.jsx    # Order form component
-│   │   └── WebhookEventsComponent.jsx # Webhook events component
-│   ├── contexts/            # React contexts
-│   │   └── AppContext.jsx   # Global application context
-│   ├── pages/               # Page components
-│   │   └── IntegrationsPage.jsx # Integrations management page
-│   ├── services/            # Service modules
-│   │   └── integrationService.js # Backend integration service
-│   ├── tests/               # Test files
-│   ├── App.jsx              # Main application component
-│   ├── App.css              # Main application styles
-│   ├── index.css            # Global styles
-│   └── main.jsx             # Application entry point
-├── .env                     # Environment variables
-├── .eslintrc.js             # ESLint configuration
-├── package.json             # Project dependencies and scripts
-├── vite.config.js           # Vite configuration
-└── README.md                # Project documentation
+│   ├── components/
+│   │   ├── OrderForm.jsx                   # Order creation form with Square POS integration
+│   │   └── WebhookEventsComponent.jsx      # Real-time webhook event feed with filtering
+│   ├── contexts/
+│   │   └── AppContext.jsx                  # Global application state
+│   ├── pages/
+│   │   └── IntegrationsPage.jsx            # Backend integrations and webhook management
+│   ├── services/
+│   │   └── integrationService.js           # Axios service layer for all API calls
+│   ├── tests/
+│   │   ├── setup.js
+│   │   ├── IntegrationsPage.test.jsx
+│   │   ├── OrderForm.test.jsx
+│   │   ├── WebhookEventsComponent.test.jsx
+│   │   └── integrationService.test.js
+│   ├── App.jsx                             # Root component with routing and layout
+│   ├── App.css
+│   ├── index.css
+│   └── main.jsx                            # Application entry point
+├── index.html
+├── package.json
+├── vite.config.js
+├── vitest.config.js
+└── README.md
 ```
+
+### Available Routes
+
+| Route | Description |
+|---|---|
+| `/` | Dashboard home |
+| `/orders` | Order creation and submission |
+| `/integrations` | Backend integrations and webhook management |
+| `/settings` | Settings (coming soon) |
+
+### API Endpoints
+
+All backend communication targets `/api/integration`. The following endpoints are expected:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/integration/adapters` | List available integration adapters |
+| `GET` | `/api/integration/connections` | List active connections |
+| `POST` | `/api/integration/connect/:system` | Connect to an external system |
+| `POST` | `/api/integration/disconnect/:connectionId` | Disconnect from a system |
+| `POST` | `/api/integration/send/:system/:endpoint` | Send data to an external system |
+| `GET` | `/api/integration/webhooks` | Fetch registered webhooks and recent events |
+| `POST` | `/api/integration/webhooks/register` | Register a new webhook endpoint |
 
 ### Code Style
 
